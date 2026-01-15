@@ -8,7 +8,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/quckchat/media-service/internal/config"
+	"github.com/quckapp/media-service/internal/config"
 )
 
 type S3Storage struct {

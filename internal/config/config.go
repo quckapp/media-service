@@ -19,7 +19,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:          getEnv("PORT", "5001"),
-		MongoURI:      getEnv("MONGODB_URI", "mongodb://localhost:27017/quckchat_media"),
+		MongoURI:      getEnv("MONGODB_URI", "mongodb://localhost:27017/quckapp_media"),
 		RedisHost:     getEnv("REDIS_HOST", "localhost"),
 		RedisPort:     getEnv("REDIS_PORT", "6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
@@ -27,7 +27,7 @@ func Load() *Config {
 		AWSRegion:     getEnv("AWS_REGION", "ap-south-1"),
 		AWSAccessKey:  getEnv("AWS_ACCESS_KEY_ID", ""),
 		AWSSecretKey:  getEnv("AWS_SECRET_ACCESS_KEY", ""),
-		S3Bucket:      getEnv("AWS_S3_BUCKET", "quckchat-media"),
+		S3Bucket:      getEnv("AWS_S3_BUCKET", "quckapp-media"),
 		KafkaBrokers:  getEnv("KAFKA_BROKERS", "localhost:9092"),
 	}
 }

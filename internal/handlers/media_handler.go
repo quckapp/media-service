@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/quckchat/media-service/internal/models"
-	"github.com/quckchat/media-service/internal/services"
+	"github.com/quckapp/media-service/internal/models"
+	"github.com/quckapp/media-service/internal/services"
 )
 
 type MediaHandler struct {
@@ -19,7 +19,7 @@ func NewMediaHandler(service *services.MediaService) *MediaHandler {
 
 func (h *MediaHandler) Upload(c *gin.Context) {
 	userID := c.GetString("userID")
-	
+
 	var req models.UploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
@@ -37,7 +37,7 @@ func (h *MediaHandler) Upload(c *gin.Context) {
 
 func (h *MediaHandler) GetPresignedURL(c *gin.Context) {
 	userID := c.GetString("userID")
-	
+
 	var req models.UploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
@@ -55,7 +55,7 @@ func (h *MediaHandler) GetPresignedURL(c *gin.Context) {
 
 func (h *MediaHandler) Get(c *gin.Context) {
 	mediaID := c.Param("id")
-	
+
 	media, err := h.service.Get(c.Request.Context(), mediaID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Media not found"})

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/quckchat/media-service/internal/database"
+	"github.com/quckapp/media-service/internal/database"
 	"github.com/redis/go-redis/v9"
 )
 

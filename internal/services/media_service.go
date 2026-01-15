@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/quckchat/media-service/internal/database"
-	"github.com/quckchat/media-service/internal/models"
+	"github.com/quckapp/media-service/internal/database"
+	"github.com/quckapp/media-service/internal/models"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -27,7 +27,7 @@ func NewMediaService(db *database.MongoDB, redis *redis.Client, storage *S3Stora
 func (s *MediaService) Create(ctx context.Context, userID string, req *models.UploadRequest) (*models.Media, error) {
 	mediaID := uuid.New().String()
 	s3Key := fmt.Sprintf("media/%s/%s/%s", userID, mediaID, req.Filename)
-	
+
 	media := &models.Media{
 		ID:        mediaID,
 		UserID:    userID,
@@ -124,7 +124,7 @@ func (s *MediaService) Delete(ctx context.Context, mediaID, userID string) error
 }
 
 func (s *MediaService) GetUserMedia(ctx context.Context, userID string, limit int64) ([]models.Media, error) {
-	cursor, err := s.db.Collection("media").Find(ctx, 
+	cursor, err := s.db.Collection("media").Find(ctx,
 		bson.M{"userId": userID},
 		options.Find().SetSort(bson.M{"createdAt": -1}).SetLimit(limit),
 	)

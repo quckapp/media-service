@@ -10,15 +10,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/quckchat/media-service/internal/config"
-	"github.com/quckchat/media-service/internal/database"
-	"github.com/quckchat/media-service/internal/handlers"
-	"github.com/quckchat/media-service/internal/services"
+	"github.com/quckapp/media-service/internal/config"
+	"github.com/quckapp/media-service/internal/database"
+	"github.com/quckapp/media-service/internal/handlers"
+	"github.com/quckapp/media-service/internal/services"
 )
 
 func main() {
 	cfg := config.Load()
-	
+
 	// Initialize MongoDB
 	mongoDB, err := database.NewMongoDB(cfg.MongoURI)
 	if err != nil {

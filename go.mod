@@ -1,4 +1,4 @@
-module github.com/quckchat/media-service
+module github.com/quckapp/media-service
 
 go 1.21
 

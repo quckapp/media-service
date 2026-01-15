@@ -28,7 +28,7 @@ func NewMongoDB(uri string) (*MongoDB, error) {
 
 	return &MongoDB{
 		Client:   client,
-		Database: client.Database("quckchat_media"),
+		Database: client.Database("quckapp_media"),
 	}, nil
 }
 
