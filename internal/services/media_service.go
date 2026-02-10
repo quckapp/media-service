@@ -154,7 +154,249 @@ func (s *MediaService) SetURL(ctx context.Context, mediaID, url string) error {
 	return err
 }
 
+func (s *MediaService) BulkDelete(ctx context.Context, mediaIDs []string, userID string) *models.BulkDeleteResponse {
+	resp := &models.BulkDeleteResponse{}
+	for _, id := range mediaIDs {
+		if err := s.Delete(ctx, id, userID); err != nil {
+			resp.Failed = append(resp.Failed, id)
+		} else {
+			resp.Deleted = append(resp.Deleted, id)
+		}
+	}
+	return resp
+}
+
+func (s *MediaService) GetMediaByChannel(ctx context.Context, channelID string, limit int64) ([]models.Media, error) {
+	cursor, err := s.db.Collection("media").Find(ctx,
+		bson.M{"metadata.channelId": channelID},
+		options.Find().SetSort(bson.M{"createdAt": -1}).SetLimit(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var media []models.Media
+	if err := cursor.All(ctx, &media); err != nil {
+		return nil, err
+	}
+
+	for i := range media {
+		media[i].URL, _ = s.storage.GetPresignedDownloadURL(media[i].S3Key, time.Hour)
+	}
+
+	return media, nil
+}
+
+func (s *MediaService) GetMediaByWorkspace(ctx context.Context, workspaceID string, limit int64) ([]models.Media, error) {
+	cursor, err := s.db.Collection("media").Find(ctx,
+		bson.M{"metadata.workspaceId": workspaceID},
+		options.Find().SetSort(bson.M{"createdAt": -1}).SetLimit(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var media []models.Media
+	if err := cursor.All(ctx, &media); err != nil {
+		return nil, err
+	}
+
+	for i := range media {
+		media[i].URL, _ = s.storage.GetPresignedDownloadURL(media[i].S3Key, time.Hour)
+	}
+
+	return media, nil
+}
+
+func (s *MediaService) GetUserStats(ctx context.Context, userID string) (*models.MediaStatsResponse, error) {
+	pipeline := bson.A{
+		bson.M{"$match": bson.M{"userId": userID}},
+		bson.M{"$group": bson.M{
+			"_id":       "$type",
+			"count":     bson.M{"$sum": 1},
+			"totalSize": bson.M{"$sum": "$size"},
+		}},
+	}
+
+	cursor, err := s.db.Collection("media").Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	stats := &models.MediaStatsResponse{
+		ByType: make(map[string]int64),
+	}
+
+	for cursor.Next(ctx) {
+		var result struct {
+			Type      string `bson:"_id"`
+			Count     int64  `bson:"count"`
+			TotalSize int64  `bson:"totalSize"`
+		}
+		if err := cursor.Decode(&result); err == nil {
+			stats.ByType[result.Type] = result.Count
+			stats.TotalFiles += result.Count
+			stats.TotalSize += result.TotalSize
+		}
+	}
+
+	return stats, nil
+}
+
+func (s *MediaService) UpdateMetadata(ctx context.Context, mediaID, userID string, metadata map[string]string) error {
+	media, err := s.Get(ctx, mediaID)
+	if err != nil {
+		return err
+	}
+	if media.UserID != userID {
+		return fmt.Errorf("unauthorized")
+	}
+
+	_, err = s.db.Collection("media").UpdateOne(ctx,
+		bson.M{"_id": mediaID},
+		bson.M{"$set": bson.M{"metadata": metadata, "updatedAt": time.Now()}},
+	)
+	if err != nil {
+		return err
+	}
+
+	s.redis.Del(ctx, fmt.Sprintf("media:%s", mediaID))
+	return nil
+}
+
+func (s *MediaService) Rename(ctx context.Context, mediaID, userID, newFilename string) error {
+	media, err := s.Get(ctx, mediaID)
+	if err != nil {
+		return err
+	}
+	if media.UserID != userID {
+		return fmt.Errorf("unauthorized")
+	}
+
+	_, err = s.db.Collection("media").UpdateOne(ctx,
+		bson.M{"_id": mediaID},
+		bson.M{"$set": bson.M{"filename": newFilename, "updatedAt": time.Now()}},
+	)
+	if err != nil {
+		return err
+	}
+
+	s.redis.Del(ctx, fmt.Sprintf("media:%s", mediaID))
+	return nil
+}
+
+func (s *MediaService) CopyMedia(ctx context.Context, mediaID, userID, targetWorkspaceID string) (*models.Media, error) {
+	media, err := s.Get(ctx, mediaID)
+	if err != nil {
+		return nil, err
+	}
+	if media.UserID != userID {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	newID := uuid.New().String()
+	newMedia := &models.Media{
+		ID:        newID,
+		UserID:    userID,
+		Type:      media.Type,
+		Filename:  media.Filename,
+		MimeType:  media.MimeType,
+		Size:      media.Size,
+		S3Key:     media.S3Key, // shares same S3 key
+		Metadata:  map[string]string{"workspaceId": targetWorkspaceID},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	_, err = s.db.Collection("media").InsertOne(ctx, newMedia)
+	if err != nil {
+		return nil, err
+	}
+	return newMedia, nil
+}
+
+func (s *MediaService) MoveMedia(ctx context.Context, mediaID, userID, targetWorkspaceID string) error {
+	media, err := s.Get(ctx, mediaID)
+	if err != nil {
+		return err
+	}
+	if media.UserID != userID {
+		return fmt.Errorf("unauthorized")
+	}
+
+	_, err = s.db.Collection("media").UpdateOne(ctx,
+		bson.M{"_id": mediaID},
+		bson.M{"$set": bson.M{
+			"metadata.workspaceId": targetWorkspaceID,
+			"updatedAt":            time.Now(),
+		}},
+	)
+	if err != nil {
+		return err
+	}
+
+	s.redis.Del(ctx, fmt.Sprintf("media:%s", mediaID))
+	return nil
+}
+
+func (s *MediaService) BulkMove(ctx context.Context, mediaIDs []string, userID, targetWorkspaceID string) *models.BulkDeleteResponse {
+	resp := &models.BulkDeleteResponse{}
+	for _, id := range mediaIDs {
+		if err := s.MoveMedia(context.Background(), id, userID, targetWorkspaceID); err != nil {
+			resp.Failed = append(resp.Failed, id)
+		} else {
+			resp.Deleted = append(resp.Deleted, id)
+		}
+	}
+	return resp
+}
+
+func (s *MediaService) GetMediaByType(ctx context.Context, userID, mediaType string, limit int64) ([]models.Media, error) {
+	cursor, err := s.db.Collection("media").Find(ctx,
+		bson.M{"userId": userID, "type": mediaType},
+		options.Find().SetSort(bson.M{"createdAt": -1}).SetLimit(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var media []models.Media
+	if err := cursor.All(ctx, &media); err != nil {
+		return nil, err
+	}
+
+	for i := range media {
+		media[i].URL, _ = s.storage.GetPresignedDownloadURL(media[i].S3Key, time.Hour)
+	}
+
+	return media, nil
+}
+
+func (s *MediaService) GetDownloadURL(ctx context.Context, mediaID string) (string, error) {
+	media, err := s.Get(ctx, mediaID)
+	if err != nil {
+		return "", err
+	}
+
+	url, err := s.storage.GetPresignedDownloadURL(media.S3Key, time.Hour)
+	if err != nil {
+		return "", err
+	}
+	return url, nil
+}
+
+func (s *MediaService) GetRecentMedia(ctx context.Context, userID string, limit int64) ([]models.Media, error) {
+	return s.GetUserMedia(ctx, userID, limit)
+}
+
 func getMediaType(mimeType string) string {
+	if len(mimeType) < 5 {
+		return "document"
+	}
 	switch {
 	case mimeType[:5] == "image":
 		return "image"
